@@ -6,12 +6,6 @@ services:
     container_name: smartlocker-web
     ports:
       - "4060:80"
-    environment:
-      DB_HOST: "192.168.2.2"
-      DB_PORT: 3306
-      DB_USER: "web"
-      DB_PASS: ""                  # Masukkan password MariaDB Anda jika ada
-      DB_NAME: "smart_locker"
     command: >
       sh -c "
       apt-get update &&
