@@ -1,0 +1,6 @@
+.git
+.gitignore
+README.md
+esp32_cam/
+esp32_main/
+*.log

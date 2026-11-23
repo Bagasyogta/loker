@@ -8,12 +8,12 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Konfigurasi Database MySQL
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '');
-define('DB_NAME', 'smart_locker');
-define('DB_PORT', 3306);
+// Konfigurasi Database MySQL (Mendukung Environment Variable Docker / Fallback Manual)
+define('DB_HOST', getenv('DB_HOST') ?: '192.168.2.2');
+define('DB_USER', getenv('DB_USER') ?: 'web');
+define('DB_PASS', getenv('DB_PASS') !== false ? getenv('DB_PASS') : '');
+define('DB_NAME', getenv('DB_NAME') ?: 'smart_locker');
+define('DB_PORT', getenv('DB_PORT') ? (int)getenv('DB_PORT') : 3306);
 
 // Tarif Sewa Dasar (Rp per jam)
 define('DEFAULT_HOURLY_RATE', 5000);
