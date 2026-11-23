@@ -2,28 +2,8 @@ version: '3.8'
 
 services:
   # =======================================================
-  # 1. Service Database MySQL (Smart Locker)
-  # =======================================================
-  db:
-    image: mysql:8.0
-    container_name: smartlocker_mysql
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpassword123
-      MYSQL_DATABASE: smart_locker
-      MYSQL_USER: web
-      MYSQL_PASSWORD: webpassword123
-    ports:
-      - "3306:3306"
-    volumes:
-      - db_data:/var/lib/mysql
-      # Otomatis impor tabel & data awal saat container pertama kali dibuat
-      - ./database.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    networks:
-      - locker_net
-
-  # =======================================================
-  # 2. Service Web Application (PHP Native + Apache)
+  # Service Web Smart Locker (PHP Native + Apache + PDO)
+  # Menggunakan Database MySQL yang sudah ada di server
   # =======================================================
   web:
     build:
@@ -31,46 +11,16 @@ services:
       dockerfile: Dockerfile
     container_name: smartlocker_web
     restart: always
-    depends_on:
-      - db
     environment:
-      DB_HOST: db
-      DB_USER: web
-      DB_PASS: webpassword123
-      DB_NAME: smart_locker
+      # Arahkan ke IP server MySQL yang sudah ada
+      DB_HOST: "192.168.2.2"
+      DB_USER: "web"
+      DB_PASS: ""                  # Isi password user 'web' MySQL Anda jika ada
+      DB_NAME: "smart_locker"
       DB_PORT: 3306
     ports:
-      - "8080:80"
+      - "8080:80"                  # Akses web di: http://<IP_SERVER>:8080
     volumes:
       - .:/var/www/html
-    networks:
-      - locker_net
-
-  # =======================================================
-  # 3. Service phpMyAdmin (Pengelolaan Database via Web)
-  # =======================================================
-  phpmyadmin:
-    image: phpmyadmin:latest
-    container_name: smartlocker_pma
-    restart: always
-    depends_on:
-      - db
-    environment:
-      PMA_HOST: db
-      PMA_PORT: 3306
-    ports:
-      - "8081:80"
-    networks:
-      - locker_net
-
-# =========================================================
-# Volumes & Networks
-# =========================================================
-volumes:
-  db_data:
-    name: smartlocker_db_data
-
-networks:
-  locker_net:
-    name: smartlocker_network
-    driver: bridge
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
