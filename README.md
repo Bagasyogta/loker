@@ -159,4 +159,5 @@ Untuk memudahkan pengujian dan presentasi di hadapan penguji tanpa harus selalu 
    - **Slider Sensor LDR**: Menyesuaikan nilai ADC (0-4095) dan menghitung Lux otomatis (Gelap, Redup, Standar, Terang, Sangat Terang).
    - **Simulasi Scan Serial**: Memilih token QR aktif dan mengirimkannya seolah-olah ditransmisikan oleh kamera ESP32-CAM.
 #   l o k e r  
+ #   l o k e r  
  
