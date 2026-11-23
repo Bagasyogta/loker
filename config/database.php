@@ -19,25 +19,68 @@ define('DB_PORT', 3306);
 define('DEFAULT_HOURLY_RATE', 5000);
 
 /**
- * Mendapatkan koneksi PDO ke MySQL
+ * Mendapatkan koneksi PDO ke MySQL / MariaDB
+ * Otomatis membuat database dan tabel jika belum ada di server
  * @return PDO
  */
 function getDbConnection() {
     static $pdo = null;
     if ($pdo === null) {
-        $dsn = "mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";charset=utf8mb4";
         $options = [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES   => false,
+            PDO::MYSQL_ATTR_MULTI_STATEMENTS => true,
         ];
+
+        $dsn = "mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";charset=utf8mb4";
         try {
             $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
         } catch (PDOException $e) {
-            die("Koneksi Database Gagal: " . $e->getMessage() . "<br>Pastikan MySQL aktif dan database 'smart_locker' sudah diimport.");
+            // Jika database belum ada, coba buat database smart_locker secara otomatis
+            try {
+                $dsnServer = "mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";charset=utf8mb4";
+                $tempPdo = new PDO($dsnServer, DB_USER, DB_PASS, $options);
+                $tempPdo->exec("CREATE DATABASE IF NOT EXISTS `" . DB_NAME . "` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;");
+                $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
+            } catch (PDOException $e2) {
+                die("Koneksi Database Gagal: " . $e->getMessage() . "<br>Pastikan MariaDB aktif dan user '" . DB_USER . "' diizinkan mengakses dari container.");
+            }
         }
+
+        // Cek dan buat otomatis tabel jika belum ada
+        initDatabaseIfNeeded($pdo);
     }
     return $pdo;
+}
+
+/**
+ * Otomatis membuat tabel dan data awal dari database.sql jika tabel belum ada
+ */
+function initDatabaseIfNeeded($pdo) {
+    try {
+        $check = $pdo->query("SHOW TABLES LIKE 'users'");
+        if ($check->rowCount() === 0) {
+            $sqlFile = __DIR__ . '/../database.sql';
+            if (file_exists($sqlFile)) {
+                $sqlContent = file_get_contents($sqlFile);
+                try {
+                    $pdo->exec($sqlContent);
+                } catch (Exception $ex) {
+                    // Jika multi-statement gagal, jalankan baris per baris
+                    $queries = explode(';', $sqlContent);
+                    foreach ($queries as $q) {
+                        $q = trim($q);
+                        if (!empty($q)) {
+                            try { $pdo->exec($q); } catch (Exception $ignored) {}
+                        }
+                    }
+                }
+            }
+        }
+    } catch (Exception $e) {
+        // Abaikan jika ada permission error non-fatal
+    }
 }
 
 /**
