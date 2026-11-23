@@ -50,9 +50,9 @@
 const char* WIFI_SSID     = "NAMA_WIFI_ANDA";       // Ganti dengan SSID WiFi Anda
 const char* WIFI_PASSWORD = "PASSWORD_WIFI_ANDA";   // Ganti dengan Password WiFi Anda
 
-// Alamat URL Server Web PHP (Ganti dengan IP Laptop/Komputer yang menjalankan web server)
-// Contoh jika menggunakan XAMPP di IP lokal: "http://192.168.1.100/Metopen"
-const char* SERVER_BASE_URL = "http://192.168.1.100/Metopen";
+// Alamat URL Server Web PHP Smart Locker (Host Server Port 4060)
+// Di Docker, web berjalan langsung di root port 4060:
+const char* SERVER_BASE_URL = "http://192.168.2.2:4060";
 
 // =====================================================================
 // DEFINISI PIN PERANGKAT KERAS

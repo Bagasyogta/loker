@@ -2,8 +2,9 @@ version: '3.8'
 
 services:
   # =======================================================
-  # Service Web Smart Locker (PHP Native + Apache + PDO)
-  # Menggunakan Database MySQL yang sudah ada di server
+  # Service Web Smart Locker (PHP Native + Apache)
+  # Port Host: 4060 -> Port Container: 80
+  # Menggunakan MariaDB/MySQL yang sudah ada di port 3306
   # =======================================================
   web:
     build:
@@ -12,14 +13,14 @@ services:
     container_name: smartlocker_web
     restart: always
     environment:
-      # Arahkan ke IP server MySQL yang sudah ada
+      # Koneksi ke MariaDB yang sudah berjalan di server
       DB_HOST: "192.168.2.2"
       DB_USER: "web"
-      DB_PASS: ""                  # Isi password user 'web' MySQL Anda jika ada
+      DB_PASS: ""                  # Isi password user MariaDB Anda jika ada
       DB_NAME: "smart_locker"
       DB_PORT: 3306
     ports:
-      - "8080:80"                  # Akses web di: http://<IP_SERVER>:8080
+      - "4060:80"                  # Aplikasi diakses via: http://192.168.2.2:4060
     volumes:
       - .:/var/www/html
     extra_hosts:
