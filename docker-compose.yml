@@ -1,27 +1,27 @@
-version: '3.8'
+version: "3.8"
 
 services:
-  # =======================================================
-  # Service Web Smart Locker (PHP Native + Apache)
-  # Port Host: 4060 -> Port Container: 80
-  # Menggunakan MariaDB/MySQL yang sudah ada di port 3306
-  # =======================================================
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: smartlocker_web
-    restart: always
-    environment:
-      # Koneksi ke MariaDB yang sudah berjalan di server
-      DB_HOST: "192.168.2.2"
-      DB_USER: "web"
-      DB_PASS: ""                  # Isi password user MariaDB Anda jika ada
-      DB_NAME: "smart_locker"
-      DB_PORT: 3306
+  smartlocker-web:
+    image: php:8.2-apache
+    container_name: smartlocker-web
     ports:
-      - "4060:80"                  # Aplikasi diakses via: http://192.168.2.2:4060
-    volumes:
-      - .:/var/www/html
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "4060:80"
+    environment:
+      DB_HOST: "192.168.2.2"
+      DB_PORT: 3306
+      DB_USER: "web"
+      DB_PASS: ""                  # Masukkan password MariaDB Anda jika ada
+      DB_NAME: "smart_locker"
+    command: >
+      sh -c "
+      apt-get update &&
+      apt-get install -y --no-install-recommends git &&
+      docker-php-ext-install pdo pdo_mysql mysqli &&
+      rm -rf /tmp/html &&
+      rm -rf /var/www/html/* &&
+      git clone --depth 1 https://github.com/Bagasyogta/Metopen.git /tmp/html &&
+      cp -r /tmp/html/. /var/www/html/ &&
+      chown -R www-data:www-data /var/www/html &&
+      apache2-foreground
+      "
+    restart: unless-stopped
