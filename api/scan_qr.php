@@ -27,6 +27,9 @@ if (empty($qrToken)) {
 
 $db = getDbConnection();
 
+// Perbarui heartbeat bahwa ESP32 sedang aktif
+$db->exec("UPDATE loker SET last_seen = NOW()");
+
 // Jika ada nilai LDR yang dikirim bersamaan, catat ke log_sensor_ldr (Bab 3.5 Pengujian Pencahayaan)
 if ($ldrVal !== null) {
     $cahaya = classifyLdrLux($ldrVal);

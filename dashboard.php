@@ -20,6 +20,12 @@ $stmtActiveRent = $db->prepare("
 $stmtActiveRent->execute([$user['id']]);
 $activeRental = $stmtActiveRent->fetch();
 
+// Hitung tarif parkir berjalan jika sesi sedang aktif
+$liveTariff = null;
+if ($activeRental && $activeRental['status'] === 'aktif' && !empty($activeRental['rent_start'])) {
+    $liveTariff = calculateParkingTariff($activeRental['rent_start']);
+}
+
 // Ambil riwayat peminjaman user
 $stmtHistory = $db->prepare("
     SELECT p.*, l.no_loker 
@@ -88,22 +94,22 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
         </div>
     <?php endif; ?>
 
-    <!-- Status Sewa Berjalan -->
+    <!-- Status Sesi Check-In Berjalan -->
     <?php if ($activeRental): ?>
         <div class="card" style="border-left: 6px solid var(--primary); margin-bottom: 24px;">
             <div class="card-header" style="background: var(--primary-light);">
                 <div>
-                    <span class="status-badge status-aktif">Sesi Sedang Berjalan</span>
+                    <span class="status-badge status-aktif">Sesi Check-In Aktif</span>
                     <h2 style="margin-top: 6px;">Unit Loker #<?= $activeRental['no_loker']; ?></h2>
                 </div>
                 <div>
                     <?php if ($activeRental['status'] === 'aktif'): ?>
                         <a href="akhiri_sewa.php?id=<?= $activeRental['id']; ?>" class="btn btn-danger">
-                            Akhiri Masa Sewa
+                            Check-Out / Ambil Barang
                         </a>
                     <?php else: ?>
                         <a href="sewa.php?id=<?= $activeRental['id']; ?>" class="btn btn-primary">
-                            Lanjutkan Proses Verifikasi (2FA)
+                            Lanjutkan Proses Check-In (2FA)
                         </a>
                     <?php endif; ?>
                 </div>
@@ -111,16 +117,18 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
             <div class="card-body">
                 <div style="display: flex; flex-wrap: wrap; gap: 24px; font-size: 0.9rem;">
                     <div>
-                        <strong style="color: var(--text-muted); display: block;">Waktu Mulai:</strong>
-                        <span><?= $activeRental['rent_start'] ? date('d M Y, H:i:s', strtotime($activeRental['rent_start'])) : 'Menunggu Aktivasi'; ?></span>
+                        <strong style="color: var(--text-muted); display: block;">Waktu Check-In:</strong>
+                        <span><?= $activeRental['rent_start'] ? date('d M Y, H:i:s', strtotime($activeRental['rent_start'])) : 'Menunggu Verifikasi Check-In'; ?></span>
                     </div>
                     <div>
-                        <strong style="color: var(--text-muted); display: block;">Durasi Sewa:</strong>
-                        <span><?= $activeRental['rent_durasi']; ?> Jam</span>
+                        <strong style="color: var(--text-muted); display: block;">Durasi Berjalan:</strong>
+                        <span><?= $liveTariff ? $liveTariff['duration_text'] . ' <small>(Jam ke-' . $liveTariff['hours'] . ')</small>' : 'Menunggu Check-In'; ?></span>
                     </div>
                     <div>
-                        <strong style="color: var(--text-muted); display: block;">Biaya Estimasi:</strong>
-                        <span style="font-weight: 700; color: var(--primary);"><?= formatRupiah($activeRental['rent_price']); ?></span>
+                        <strong style="color: var(--text-muted); display: block;">Tarif Berjalan:</strong>
+                        <span style="font-weight: 700; color: var(--primary);">
+                            <?= $liveTariff ? formatRupiah($liveTariff['fee']) : formatRupiah(DEFAULT_HOURLY_RATE); ?>
+                        </span>
                     </div>
                     <div>
                         <strong style="color: var(--text-muted); display: block;">Status Operasional:</strong>
@@ -144,22 +152,40 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
         <div class="grid-3">
             <?php foreach ($lockers as $l): ?>
                 <?php 
+                    // ESP32 dianggap online jika ada aktivitas polling/heartbeat dalam 10 detik terakhir
+                    $isEspOnline = (!empty($l['last_seen']) && (time() - strtotime($l['last_seen'])) <= 10);
                     $isOccupied = ($l['status'] === 'terpakai');
                     $isMaintenance = ($l['status'] === 'maintenance');
-                    $cardClass = $isOccupied ? 'occupied' : ($isMaintenance ? 'maintenance' : 'available');
+
+                    if (!$isEspOnline && !$isOccupied) {
+                        $displayStatus = 'Tidak Tersedia';
+                        $badgeClass = 'status-tidak-tersedia';
+                        $cardClass = 'offline';
+                    } else {
+                        $displayStatus = ucfirst($l['status']);
+                        $badgeClass = 'status-' . $l['status'];
+                        $cardClass = $isOccupied ? 'occupied' : ($isMaintenance ? 'maintenance' : 'available');
+                    }
                 ?>
                 <div class="locker-card <?= $cardClass; ?>">
-                    <span class="status-badge status-<?= $l['status']; ?>"><?= ucfirst($l['status']); ?></span>
+                    <span class="status-badge <?= $badgeClass; ?>"><?= $displayStatus; ?></span>
                     <div class="locker-number">L-0<?= $l['no_loker']; ?></div>
                     <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 14px;">
-                        Tarif: <?= formatRupiah(DEFAULT_HOURLY_RATE); ?> / Jam
+                        Tarif: <?= formatRupiah(DEFAULT_HOURLY_RATE); ?> / Jam (Sistem Parkir)
+                        <?php if (!$isEspOnline && !$isOccupied): ?>
+                            <br><small style="color: #64748b; font-size: 0.75rem;">(ESP32 Belum Konek)</small>
+                        <?php elseif ($isEspOnline): ?>
+                            <br><small style="color: #10b981; font-size: 0.75rem; font-weight: 600;">● ESP32 Terkoneksi</small>
+                        <?php endif; ?>
                     </p>
 
-                    <?php if ($l['status'] === 'tersedia'): ?>
+                    <?php if (!$isEspOnline && !$isOccupied): ?>
+                        <button class="btn btn-sm btn-secondary btn-block" disabled title="Loker tidak tersedia karena ESP32 belum terkoneksi">Tidak Tersedia</button>
+                    <?php elseif ($l['status'] === 'tersedia'): ?>
                         <?php if ($activeRental): ?>
-                            <button class="btn btn-sm btn-secondary btn-block" disabled title="Selesaikan sewa aktif Anda terlebih dahulu">Sedang Menyewa</button>
+                            <button class="btn btn-sm btn-secondary btn-block" disabled title="Selesaikan sesi aktif Anda terlebih dahulu">Sedang Digunakan</button>
                         <?php else: ?>
-                            <a href="sewa.php?loker_id=<?= $l['id']; ?>" class="btn btn-sm btn-primary btn-block">Sewa Loker Ini</a>
+                            <a href="sewa.php?loker_id=<?= $l['id']; ?>" class="btn btn-sm btn-primary btn-block">Check-In Loker Ini</a>
                         <?php endif; ?>
                     <?php elseif ($l['status'] === 'terpakai'): ?>
                         <span style="font-size: 0.8rem; font-weight: 600; color: #dc2626;">🔒 Terkunci (Sedang Digunakan)</span>

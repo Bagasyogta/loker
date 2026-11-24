@@ -36,7 +36,8 @@ CREATE TABLE `users` (
 CREATE TABLE `loker` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `no_loker` INT NOT NULL UNIQUE,
-  `status` ENUM('tersedia', 'terpakai', 'maintenance') NOT NULL DEFAULT 'tersedia'
+  `status` ENUM('tersedia', 'terpakai', 'maintenance') NOT NULL DEFAULT 'tersedia',
+  `last_seen` DATETIME DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- --------------------------------------------------------------------

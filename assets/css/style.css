@@ -314,6 +314,12 @@ body {
   color: #166534;
 }
 
+.status-tidak-tersedia, .status-offline {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+}
+
 .status-terpakai {
   background: #fee2e2;
   color: #991b1b;
@@ -351,6 +357,12 @@ body {
 
 .locker-card.available {
   border-color: #86efac;
+}
+
+.locker-card.offline {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  opacity: 0.88;
 }
 
 .locker-card.occupied {

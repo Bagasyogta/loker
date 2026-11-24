@@ -78,6 +78,14 @@ function initDatabaseIfNeeded($pdo) {
                 }
             }
         }
+
+        // Pastikan kolom last_seen ada di tabel loker (Heartbeat status ESP32)
+        try {
+            $colCheck = $pdo->query("SHOW COLUMNS FROM loker LIKE 'last_seen'");
+            if ($colCheck->rowCount() === 0) {
+                $pdo->exec("ALTER TABLE loker ADD COLUMN last_seen DATETIME NULL DEFAULT NULL");
+            }
+        } catch (Exception $e) {}
     } catch (Exception $e) {
         // Abaikan jika ada permission error non-fatal
     }
@@ -118,6 +126,48 @@ function requireLogin() {
  */
 function formatRupiah($angka) {
     return 'Rp ' . number_format($angka, 0, ',', '.');
+}
+
+/**
+ * Menghitung tarif loker berbasis waktu per jam (sistem tarif seperti parkir)
+ * Dihitung setelah check-in, jam pertama Rp 5.000, setiap kelebihan jam bertambah Rp 5.000
+ */
+function calculateParkingTariff($rentStart, $rentEnd = null) {
+    if (empty($rentStart)) {
+        return [
+            'seconds' => 0,
+            'hours' => 1,
+            'fee' => DEFAULT_HOURLY_RATE,
+            'duration_text' => '0 Menit'
+        ];
+    }
+
+    $startTime = strtotime($rentStart);
+    $endTime = $rentEnd ? strtotime($rentEnd) : time();
+    $diffSeconds = max(0, $endTime - $startTime);
+
+    // Sistem parkir: Minimal 1 jam, setiap masuk jam berikutnya dihitung +1 jam
+    $hours = max(1, (int)ceil($diffSeconds / 3600.0));
+    $fee = $hours * DEFAULT_HOURLY_RATE;
+
+    $h = floor($diffSeconds / 3600);
+    $m = floor(($diffSeconds % 3600) / 60);
+    $s = $diffSeconds % 60;
+
+    if ($h > 0) {
+        $durationText = "{$h} Jam {$m} Menit";
+    } elseif ($m > 0) {
+        $durationText = "{$m} Menit {$s} Detik";
+    } else {
+        $durationText = "{$s} Detik";
+    }
+
+    return [
+        'seconds' => $diffSeconds,
+        'hours' => $hours,
+        'fee' => $fee,
+        'duration_text' => $durationText
+    ];
 }
 
 /**

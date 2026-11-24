@@ -22,6 +22,7 @@ if ($adc === null) {
 $cahaya = classifyLdrLux($adc);
 
 $db = getDbConnection();
+$db->exec("UPDATE loker SET last_seen = NOW()");
 $stmt = $db->prepare("INSERT INTO log_sensor_ldr (nilai_adc, estimasi_lux, kategori, waktu) VALUES (?, ?, ?, NOW())");
 $stmt->execute([$adc, $cahaya['lux'], $cahaya['kategori']]);
 

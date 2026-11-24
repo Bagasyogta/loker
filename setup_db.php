@@ -61,6 +61,15 @@ try {
     $logs[] = "👤 Jumlah Akun Pengguna Terdaftar: " . $userCount . " user.";
     $logs[] = "📦 Jumlah Unit Loker: " . $lokerCount . " unit terdaftar (Loker 1 dan Loker 2).";
 
+    // 7. Pastikan Kolom last_seen Tersedia
+    try {
+        $colCheck = $pdo->query("SHOW COLUMNS FROM loker LIKE 'last_seen'");
+        if ($colCheck->rowCount() === 0) {
+            $pdo->exec("ALTER TABLE loker ADD COLUMN last_seen DATETIME NULL DEFAULT NULL");
+            $logs[] = "✅ Kolom `last_seen` (Heartbeat ESP32) berhasil ditambahkan.";
+        }
+    } catch (Exception $e) {}
+
 } catch (Exception $e) {
     $status = 'error';
     $logs[] = "❌ Terjadi kesalahan: " . $e->getMessage();

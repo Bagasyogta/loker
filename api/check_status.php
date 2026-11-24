@@ -28,6 +28,9 @@ if ($mode === 'user_polling') {
 
 // Mode Mikrokontroler ESP32 Utama
 if ($mode === 'esp32') {
+    // Perbarui waktu aktif ESP32 (Heartbeat status koneksi)
+    $db->exec("UPDATE loker SET last_seen = NOW()");
+
     // Cari apakah ada peminjaman dengan trigger buka solenoid aktif
     $stmt = $db->query("
         SELECT p.id, p.id_loker, p.status, l.no_loker 

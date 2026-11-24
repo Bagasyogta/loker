@@ -8,7 +8,7 @@ $error = '';
 
 $peminjamanId = isset($_GET['id']) ? intval($_GET['id']) : 0;
 
-// Cari data peminjaman aktif milik user
+// Cari data sesi check-in aktif milik user
 $stmtRent = $db->prepare("
     SELECT p.*, l.no_loker 
     FROM peminjaman p 
@@ -24,9 +24,9 @@ if (!$peminjaman) {
     exit;
 }
 
-// Inisialisasi token QR pengakhiran sewa jika status masih 'aktif'
+// Inisialisasi token QR Check-Out jika status masih 'aktif'
 if ($peminjaman['status'] === 'aktif') {
-    $token = 'SL-END-' . strtoupper(bin2hex(random_bytes(6))) . '-' . $peminjamanId;
+    $token = 'SL-OUT-' . strtoupper(bin2hex(random_bytes(6))) . '-' . $peminjamanId;
     $expired = date('Y-m-d H:i:s', strtotime('+15 minutes'));
 
     $stmtInsertQr = $db->prepare("
@@ -40,7 +40,7 @@ if ($peminjaman['status'] === 'aktif') {
     $peminjaman['status'] = 'menunggu_akhiri_scan';
 }
 
-// Ambil QR code aktif tipe 'akhiri'
+// Ambil QR code aktif tipe 'akhiri' (check-out)
 $stmtQr = $db->prepare("
     SELECT * FROM qr_code 
     WHERE id_peminjaman = ? AND tipe = 'akhiri' 
@@ -49,36 +49,39 @@ $stmtQr = $db->prepare("
 $stmtQr->execute([$peminjamanId]);
 $qrRecord = $stmtQr->fetch();
 
-// Proses Verifikasi Password & Saldo (Sesuai Bab 3 Gambar 3.7)
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'konfirmasi_akhiri') {
+// Hitung tarif parkir berjalan (dihitung sejak waktu check-in, bertambah Rp 5.000 setiap jam)
+$tariff = calculateParkingTariff($peminjaman['rent_start']);
+$totalBiaya = $tariff['fee'];
+$totalJam = $tariff['hours'];
+$durasiText = $tariff['duration_text'];
+
+// Proses Verifikasi Password (2FA) & Pembayaran
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'konfirmasi_checkout') {
     $password = $_POST['password'] ?? '';
 
     if (empty($password)) {
-        $error = 'Kata sandi wajib diisi untuk konfirmasi pengakhiran sewa!';
+        $error = 'Kata sandi wajib diisi untuk konfirmasi check-out!';
     } else {
         $stmtUserDb = $db->prepare("SELECT password, saldo FROM users WHERE id = ?");
         $stmtUserDb->execute([$user['id']]);
         $currentUser = $stmtUserDb->fetch();
 
-        // 1. Cek Password (2FA)
+        // 1. Cek Password (Faktor 2 - 2FA)
         if (!password_verify($password, $currentUser['password'])) {
-            $error = 'Kata sandi salah! Akses pengakhiran sewa ditolak.';
+            $error = 'Kata sandi salah! Verifikasi tahap kedua (2FA) gagal.';
             $stmtLog = $db->prepare("
                 INSERT INTO akses (id_peminjaman, id_qr, qr_valid, password_valid, hasil, waktu) 
-                VALUES (?, ?, 1, 0, 'gagal_password_akhiri', NOW())
+                VALUES (?, ?, 1, 0, 'gagal_password_checkout', NOW())
             ");
             $stmtLog->execute([$peminjamanId, $qrRecord['id'] ?? null]);
         } else {
-            // 2. Cek Kecukupan Saldo (Sesuai Gambar 3.7: "Apakah Saldo Cukup?")
-            $biaya = $peminjaman['rent_price'];
-
-            if ($currentUser['saldo'] < $biaya) {
-                // Sesuai Activity Diagram Gambar 3.7: Saldo Tidak Cukup -> Tampilkan Pesan Saldo Tidak Cukup
-                $error = 'Saldo Anda tidak mencukupi untuk pembayaran sewa! Biaya: ' . formatRupiah($biaya) . ', Saldo Anda: ' . formatRupiah($currentUser['saldo']) . '. Silakan lakukan Top Up terlebih dahulu.';
+            // 2. Cek Kecukupan Saldo
+            if ($currentUser['saldo'] < $totalBiaya) {
+                $error = 'Saldo Anda tidak mencukupi untuk pembayaran! Total Tagihan: ' . formatRupiah($totalBiaya) . ' (Durasi: ' . $durasiText . '), Saldo Anda: ' . formatRupiah($currentUser['saldo']) . '. Silakan lakukan Top Up terlebih dahulu.';
                 
                 $stmtLog = $db->prepare("
                     INSERT INTO akses (id_peminjaman, id_qr, qr_valid, password_valid, hasil, waktu) 
-                    VALUES (?, ?, 1, 1, 'gagal_saldo', NOW())
+                    VALUES (?, ?, 1, 1, 'gagal_saldo_checkout', NOW())
                 ");
                 $stmtLog->execute([$peminjamanId, $qrRecord['id'] ?? null]);
             } else {
@@ -87,17 +90,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 try {
                     // Potong Saldo
                     $stmtPotong = $db->prepare("UPDATE users SET saldo = saldo - ? WHERE id = ?");
-                    $stmtPotong->execute([$biaya, $user['id']]);
+                    $stmtPotong->execute([$totalBiaya, $user['id']]);
 
-                    // Update Peminjaman -> Selesai
+                    // Update Sesi Peminjaman -> Selesai
                     $stmtUpdatePeminjaman = $db->prepare("
                         UPDATE peminjaman 
-                        SET status = 'selesai', rent_end = NOW(), door_unlock_trigger = 1, door_unlocked_at = NOW() 
+                        SET status = 'selesai', rent_end = NOW(), rent_durasi = ?, rent_price = ?, door_unlock_trigger = 1, door_unlocked_at = NOW() 
                         WHERE id = ?
                     ");
-                    $stmtUpdatePeminjaman->execute([$peminjamanId]);
+                    $stmtUpdatePeminjaman->execute([$totalJam, $totalBiaya, $peminjamanId]);
 
-                    // Reset Status Loker -> Tersedia (Sesuai Tahap 21 Flowchart Gambar 3.11)
+                    // Reset Status Loker -> Tersedia
                     $stmtResetLoker = $db->prepare("UPDATE loker SET status = 'tersedia' WHERE id = ?");
                     $stmtResetLoker->execute([$peminjaman['id_loker']]);
 
@@ -110,13 +113,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     // Catat Log Sukses ke Tabel AKSES
                     $stmtLogSuccess = $db->prepare("
                         INSERT INTO akses (id_peminjaman, id_qr, qr_valid, password_valid, hasil, waktu) 
-                        VALUES (?, ?, 1, 1, 'berhasil_kembali', NOW())
+                        VALUES (?, ?, 1, 1, 'berhasil_checkout', NOW())
                     ");
                     $stmtLogSuccess->execute([$peminjamanId, $qrRecord['id'] ?? null]);
 
                     $db->commit();
 
-                    $_SESSION['flash_success'] = "Pembayaran " . formatRupiah($biaya) . " Berhasil! Solenoid Door Lock Loker #{$peminjaman['no_loker']} terbuka untuk pengambilan barang. Terima kasih!";
+                    $_SESSION['flash_success'] = "Pembayaran " . formatRupiah($totalBiaya) . " Berhasil! Solenoid Door Lock Loker #{$peminjaman['no_loker']} terbuka untuk pengambilan barang. Terima kasih!";
                     header("Location: dashboard.php");
                     exit;
                 } catch (Exception $e) {
@@ -133,7 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Akhiri Sewa Loker - Smart Locker IoT</title>
+    <title>Check-Out Loker - Smart Locker IoT</title>
     <link rel="stylesheet" href="assets/css/style.css">
     <script src="assets/js/qrcode.min.js"></script>
 </head>
@@ -163,45 +166,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     <div class="card" style="margin-top: 20px;">
         <div class="card-header">
-            <h2>Pengakhiran Sewa &bull; Unit Loker #<?= $peminjaman['no_loker']; ?></h2>
+            <h2>Prosedur Check-Out &bull; Unit Loker #<?= $peminjaman['no_loker']; ?></h2>
             <span class="status-badge status-<?= $peminjaman['status']; ?>">
                 <?= str_replace('_', ' ', strtoupper($peminjaman['status'])); ?>
             </span>
         </div>
         <div class="card-body">
 
-            <!-- Rincian Biaya -->
+            <!-- Rincian Biaya Sistem Parkir Berjalan -->
             <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 20px;">
-                <h4 style="margin-bottom: 8px; color: var(--primary);">Ringkasan Biaya Pemakaian</h4>
-                <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 4px;">
-                    <span>Durasi Peminjaman:</span>
-                    <strong><?= $peminjaman['rent_durasi']; ?> Jam</strong>
+                <h4 style="margin-bottom: 10px; color: var(--primary);">Perhitungan Tarif Pemakaian (Sistem Parkir)</h4>
+                
+                <div style="display: flex; justify-content: space-between; font-size: 0.88rem; margin-bottom: 4px;">
+                    <span style="color: var(--text-muted);">Waktu Check-In:</span>
+                    <span><?= date('d M Y, H:i:s', strtotime($peminjaman['rent_start'])); ?></span>
                 </div>
-                <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 4px;">
-                    <span>Total Tagihan Sewa:</span>
-                    <strong style="color: var(--danger); font-size: 1.05rem;"><?= formatRupiah($peminjaman['rent_price']); ?></strong>
+                <div style="display: flex; justify-content: space-between; font-size: 0.88rem; margin-bottom: 4px;">
+                    <span style="color: var(--text-muted);">Waktu Check-Out (Saat Ini):</span>
+                    <span><?= date('d M Y, H:i:s'); ?></span>
                 </div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.88rem; margin-bottom: 4px;">
+                    <span style="color: var(--text-muted);">Durasi Pemakaian:</span>
+                    <strong><?= $durasiText; ?> (Dihitung <?= $totalJam; ?> Jam)</strong>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; font-size: 0.95rem; border-top: 1px dashed var(--border); padding-top: 8px; margin-top: 8px;">
+                    <span>Tarif per Jam:</span>
+                    <span><?= formatRupiah(DEFAULT_HOURLY_RATE); ?> / Jam</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 1.05rem; margin-top: 4px;">
+                    <span><strong>Total Tagihan:</strong></span>
+                    <strong style="color: var(--danger); font-size: 1.15rem;"><?= formatRupiah($totalBiaya); ?></strong>
+                </div>
+
                 <div style="display: flex; justify-content: space-between; font-size: 0.9rem; border-top: 1px solid var(--border); padding-top: 8px; margin-top: 8px;">
-                    <span>Saldo Anda Saat Ini:</span>
-                    <strong style="color: <?= $user['saldo'] >= $peminjaman['rent_price'] ? 'green' : 'red'; ?>;">
+                    <span>Saldo Akun Anda:</span>
+                    <strong style="color: <?= $user['saldo'] >= $totalBiaya ? 'green' : 'red'; ?>;">
                         <?= formatRupiah($user['saldo']); ?>
                     </strong>
                 </div>
-                <?php if ($user['saldo'] < $peminjaman['rent_price']): ?>
+                <?php if ($user['saldo'] < $totalBiaya): ?>
                     <div style="margin-top: 10px;">
                         <a href="topup.php" class="btn btn-sm btn-success btn-block">+ Top Up Saldo Sekarang</a>
                     </div>
                 <?php endif; ?>
             </div>
 
-            <!-- STEP 1: SCAN QR CODE AKHIRI SEWA -->
+            <!-- STEP 1: SCAN QR CODE CHECK-OUT -->
             <div class="step-box" style="<?= $peminjaman['status'] === 'menunggu_akhiri_scan' ? 'border-color: var(--primary); background: #eff6ff;' : 'opacity: 0.7;'; ?>">
                 <div class="step-number" style="<?= $peminjaman['status'] === 'menunggu_akhiri_password' ? 'background: #10b981;' : ''; ?>">
                     <?= $peminjaman['status'] === 'menunggu_akhiri_password' ? '✔' : '1'; ?>
                 </div>
                 <div class="step-text">
-                    <h4>Tahap 1: Pindai QR Code Pengakhiran</h4>
-                    <p>Pindai kode QR berikut pada kamera ESP32-CAM loker untuk verifikasi identitas pemilik.</p>
+                    <h4>Tahap 1: Pindai QR Code Check-Out (Faktor 1 Kepemilikan)</h4>
+                    <p>Arahkan kode QR Check-Out di bawah ke modul kamera ESP32-CAM pada loker.</p>
                 </div>
             </div>
 
@@ -209,7 +227,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 <div class="qr-container">
                     <div class="qr-box" id="qrcode"></div>
                     <div style="margin-top: 12px;">
-                        <span style="font-size: 0.85rem; color: var(--text-muted);">Token Pengakhiran:</span><br>
+                        <span style="font-size: 0.85rem; color: var(--text-muted);">Token Check-Out Anda:</span><br>
                         <code style="font-size: 1.05rem; font-weight: bold; color: var(--primary);"><?= htmlspecialchars($qrRecord['qr_token'] ?? ''); ?></code>
                     </div>
                     <div class="qr-timer">
@@ -218,7 +236,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
                     <div style="margin-top: 16px; display: flex; gap: 8px; align-items: center; justify-content: center; font-size: 0.85rem; color: #0284c7;">
                         <span style="display:inline-block; animation: spin 1s linear infinite;">⏳</span>
-                        <span>Menunggu kamera ESP32-CAM membaca kode pengakhiran...</span>
+                        <span>Menunggu kamera ESP32-CAM membaca kode check-out...</span>
                     </div>
 
                     <div style="margin-top: 20px; padding: 12px; background: #f8fafc; border-radius: 8px; width: 100%; border: 1px dashed #cbd5e1;">
@@ -233,19 +251,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             <div class="step-box" style="<?= $peminjaman['status'] === 'menunggu_akhiri_password' ? 'border-color: var(--primary); background: #eff6ff;' : ($peminjaman['status'] === 'menunggu_akhiri_scan' ? 'opacity: 0.5;' : ''); ?>">
                 <div class="step-number">2</div>
                 <div class="step-text">
-                    <h4>Tahap 2: Otentikasi Password & Pembayaran Saldo (2FA)</h4>
-                    <p>Masukkan kata sandi akun untuk konfirmasi pemotongan saldo dan pembukaan loker.</p>
+                    <h4>Tahap 2: Konfirmasi Password Akun (Faktor 2 Knowledge) & Pembayaran</h4>
+                    <p>Masukkan kata sandi akun Anda sebagai konfirmasi kedua untuk membuka pintu pengambilan barang.</p>
                 </div>
             </div>
 
             <?php if ($peminjaman['status'] === 'menunggu_akhiri_password'): ?>
                 <div style="background: #ffffff; border: 2px solid #93c5fd; border-radius: 12px; padding: 20px;">
                     <div class="alert alert-success" style="margin-bottom: 14px;">
-                        <span>✅</span> <div><strong>QR Code Pengakhiran Berhasil Terbaca!</strong> Masukkan kata sandi akun Anda untuk membuka pintu dan menyelesaikan transaksi.</div>
+                        <span>✅</span> <div><strong>QR Code Check-Out Berhasil Terbaca!</strong> Masukkan kata sandi akun Anda untuk konfirmasi kedua dan membuka pintu loker.</div>
                     </div>
 
                     <form method="POST" action="akhiri_sewa.php?id=<?= $peminjamanId; ?>">
-                        <input type="hidden" name="action" value="konfirmasi_akhiri">
+                        <input type="hidden" name="action" value="konfirmasi_checkout">
 
                         <div class="form-group">
                             <label for="password">Kata Sandi Akun Pengguna</label>
@@ -253,7 +271,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         </div>
 
                         <button type="submit" class="btn btn-danger btn-block" style="padding: 12px; font-size: 1rem;">
-                            💰 Bayar (<?= formatRupiah($peminjaman['rent_price']); ?>) & Buka Pintu Pengambilan
+                            💰 Bayar (<?= formatRupiah($totalBiaya); ?>) & Buka Pintu Pengambilan
                         </button>
                     </form>
                 </div>
