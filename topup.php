@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $db = getDbConnection();
         $stmt = $db->prepare("UPDATE users SET saldo = saldo + ? WHERE id = ?");
         if ($stmt->execute([$nominal, $user['id']])) {
-            $_SESSION['flash_success'] = 'Berhasil melakukan pengisian saldo simulasi sebesar ' . formatRupiah($nominal) . '! Saldo Anda kini diperbarui.';
+            $_SESSION['flash_success'] = 'Berhasil melakukan pengisian saldo sebesar ' . formatRupiah($nominal) . '! Saldo Anda kini diperbarui.';
             header("Location: dashboard.php");
             exit;
         } else {
@@ -76,11 +76,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <main class="container" style="max-width: 520px;">
     <div class="card" style="margin-top: 20px;">
         <div class="card-header">
-            <h2>Top Up Saldo Simulasi (Dummy)</h2>
+            <h2>Top Up Saldo Akun</h2>
         </div>
         <div class="card-body">
             <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">
-                Fitur ini merupakan simulasi saldo digital untuk pengujian transaksi sewa loker cerdas tanpa integrasi payment gateway eksternal nyata (sesuai Bab 1.5 & Bab 3.4).
+                Pilih nominal pengisian saldo untuk penggunaan fasilitas sewa loker cerdas.
             </p>
 
             <?php if (!empty($error)): ?>

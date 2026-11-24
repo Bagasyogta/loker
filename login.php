@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <form method="POST" action="login.php">
             <div class="form-group">
                 <label for="username">Username atau Email</label>
-                <input type="text" id="username" name="username" class="form-control" placeholder="Contoh: bagas" required autofocus>
+                <input type="text" id="username" name="username" class="form-control" placeholder="Masukkan username atau email" required autofocus>
             </div>
 
             <div class="form-group">
@@ -84,11 +84,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <div style="margin-top: 20px; text-align: center; font-size: 0.85rem; color: #64748b;">
             Belum memiliki akun? <a href="register.php" style="color: var(--primary); font-weight: 600; text-decoration: none;">Daftar Sekarang</a>
-        </div>
-
-        <div style="margin-top: 25px; padding: 12px; background: #f1f5f9; border-radius: 8px; font-size: 0.8rem; color: #475569;">
-            <strong>Demo User:</strong><br>
-            Username: <code>bagas</code> | Password: <code>password123</code>
         </div>
     </div>
 </div>

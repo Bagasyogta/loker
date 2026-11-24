@@ -58,8 +58,8 @@ try {
     // 6. Cek Data Awal
     $userCount = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
     $lokerCount = $pdo->query("SELECT COUNT(*) FROM loker")->fetchColumn();
-    $logs[] = "👤 Jumlah Akun Pengguna: " . $userCount . " (Demo user: 'bagas' / 'password123')";
-    $logs[] = "📦 Jumlah Unit Loker: " . $lokerCount . " unit terdaftar.";
+    $logs[] = "👤 Jumlah Akun Pengguna Terdaftar: " . $userCount . " user.";
+    $logs[] = "📦 Jumlah Unit Loker: " . $lokerCount . " unit terdaftar (Loker 1 dan Loker 2).";
 
 } catch (Exception $e) {
     $status = 'error';

@@ -274,9 +274,9 @@ if (!$peminjamanId) {
                             <span>Menunggu kamera ESP32-CAM membaca kode QR...</span>
                         </div>
 
-                        <!-- Tombol Bantuan Simulasi Scan Kamera (Sangat bermanfaat untuk Pengujian & Demo tanpa alat) -->
+                        <!-- Tombol Bantuan Simulasi Scan Kamera -->
                         <div style="margin-top: 20px; padding: 12px; background: #f8fafc; border-radius: 8px; width: 100%; border: 1px dashed #cbd5e1;">
-                            <span style="font-size: 0.78rem; color: var(--text-muted); display: block; margin-bottom: 6px;">Untuk Keperluan Pengujian Penguji/Dosen (Tanpa Hardware Fisik):</span>
+                            <span style="font-size: 0.78rem; color: var(--text-muted); display: block; margin-bottom: 6px;">Simulasi Pemindaian Kamera (Uji Coba Sistem):</span>
                             <button type="button" class="btn btn-sm btn-secondary" onclick="simulateScan('<?= $qrRecord['qr_token'] ?? ''; ?>')">
                                 📷 Simulasikan Scan oleh ESP32-CAM
                             </button>

@@ -98,17 +98,8 @@ CREATE TABLE `log_sensor_ldr` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- --------------------------------------------------------------------
--- DATA AWAL (SEEDING)
+-- DATA AWAL UNIT LOKER (HANYA 2 UNIT LOKER)
 -- --------------------------------------------------------------------
--- Akun demo: username "bagas", password "password123"
--- Password hash menggunakan password_hash('password123', PASSWORD_BCRYPT)
-INSERT INTO `users` (`id`, `username`, `email`, `telepon`, `password`, `saldo`, `dibuat`) VALUES
-(1, 'bagas', 'bagas@upi.edu', '081234567890', '$2y$10$vG0b6xK8wzF/e7M.b69uTuN14q.Wp/b2gN3qI5OhyJdFzNkVfR1jK', 100000.00, NOW()),
-(2, 'user2', 'user2@example.com', '089876543210', '$2y$10$vG0b6xK8wzF/e7M.b69uTuN14q.Wp/b2gN3qI5OhyJdFzNkVfR1jK', 25000.00, NOW());
-
--- Data unit loker (Loker 1 s/d 4)
 INSERT INTO `loker` (`id`, `no_loker`, `status`) VALUES
 (1, 1, 'tersedia'),
-(2, 2, 'tersedia'),
-(3, 3, 'tersedia'),
-(4, 4, 'maintenance');
+(2, 2, 'tersedia');

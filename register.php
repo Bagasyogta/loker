@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmtInsert = $db->prepare("INSERT INTO users (username, email, telepon, password, saldo, dibuat) VALUES (?, ?, ?, ?, 50000.00, NOW())");
             
             if ($stmtInsert->execute([$username, $email, $telepon, $hash])) {
-                $_SESSION['success_msg'] = 'Pendaftaran berhasil! Saldo awal simulasi Rp 50.000 telah diberikan. Silakan masuk.';
+                $_SESSION['success_msg'] = 'Pendaftaran berhasil! Akun Anda telah aktif, silakan masuk.';
                 header("Location: login.php");
                 exit;
             } else {
@@ -76,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <form method="POST" action="register.php">
             <div class="form-group">
                 <label for="username">Username</label>
-                <input type="text" id="username" name="username" class="form-control" placeholder="Contoh: bagas24" value="<?= htmlspecialchars($_POST['username'] ?? ''); ?>" required>
+                <input type="text" id="username" name="username" class="form-control" placeholder="Masukkan username" value="<?= htmlspecialchars($_POST['username'] ?? ''); ?>" required>
             </div>
 
             <div class="form-group">
@@ -86,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <div class="form-group">
                 <label for="telepon">Nomor Telepon / WhatsApp</label>
-                <input type="tel" id="telepon" name="telepon" class="form-control" placeholder="081234567890" value="<?= htmlspecialchars($_POST['telepon'] ?? ''); ?>" required>
+                <input type="tel" id="telepon" name="telepon" class="form-control" placeholder="Nomor Telepon / WhatsApp" value="<?= htmlspecialchars($_POST['telepon'] ?? ''); ?>" required>
             </div>
 
             <div class="form-group">
